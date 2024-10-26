@@ -1,0 +1,7 @@
+{:check.core/string check.generators/string
+ #_#_:check.core/url check.generators/url
+ #_#_:check.core/email check.generators/email
+ #_#_:check.core/uuid check.generators/uuid
+ #_#_:check.core/integer check.generators/integer
+ #_#_:check.core/person check.generators/person
+ :check.core/number check.generators/number}
