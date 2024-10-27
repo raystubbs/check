@@ -13,10 +13,10 @@ no runtime cost.
 
 
 ```clojure
-(require '[check.core :refer [check] :as ck]')
+(require '[check.core :refer [check samp samps] :as ck]')
 
-(check ::is-string?
-  (assert (string? (::ck/sample ::ck/string))))
+(check ::string?
+  (assert (string? (samp ::ck/string))))
 ```
 
 For each check that's executed, the reporter function is

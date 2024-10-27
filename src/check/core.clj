@@ -34,46 +34,58 @@
       (.getResources "me/raystubbs/check/generators.edn")
       enumeration-seq)))
 
-(defn- samples
-  [gen-key gen-opts]
+(defmacro samps
+  [gen-key & {:as gen-opts}]
   (walk/postwalk
     (fn [x] (cond->> x (seq? x) (cons 'list)))
     ((requiring-resolve (generators gen-key)) gen-opts)))
 
-(defn- report
-  [& {:as report}]
-  (list `(clojure.core/resolve '~reporter) report))
+(defmacro samp
+  [gen-key & {:as gen-opts}]
+  `(clojure.core/first (samps ~gen-key ~(assoc gen-opts :limit 1))))
 
-(defn- inner
-  [check-key body]
-  `(clojure.core/binding
-    [check.impl/*key* ~check-key]
-     (check.impl/try-catch
-       (fn []
-         ~@body)
-       (fn [~'ex]
-         ~(report
-            ::status ::failure
-            ::key check-key
-            ::exception 'ex)))))
+(defmacro ^:no-doc async-chain-forms
+  [forms context callback]
+  (if (empty? forms)
+    `(~callback ~context)
+    `((check.protocols/async-chain-fn
+        (check.impl/try-catch
+          (fn [] ~(first forms))
+          (fn [error#] (check.impl/fail error#))))
+      ~context
+      (fn [next-context#]
+        (if (::error next-context#)
+          (~callback next-context#)
+          (async-chain-forms ~(rest forms) next-context# ~callback))))))
 
 (defmacro check
   [check-key & body]
   (when enabled
-    (inner check-key
-      (walk/postwalk
-        (fn [x]
-          (if-not (seq? x)
-            x
-            (case (first x)
-              (::sample ::samples)
-              (let [[gen-key & {:as gen-opts}] (rest x)]
-                (case (first x)
-                  ::sample `(clojure.core/first ~(samples gen-key (assoc gen-opts :limit 1)))
-                  ::samples (take (or (:limit gen-opts) 128) (samples gen-key gen-opts))))
+    `(do
+       (swap! check.impl/!status assoc ~check-key ::pending)
+       (async-chain-forms ~body
+         {::key ~check-key
+          ::reporter ~(if &env
+                        `(clojure.core/resolve '~reporter)
+                        `(clojure.core/requiring-resolve '~reporter))}
+         (fn [final-context#]
+           (check.impl/report final-context#))))))
 
-              ::inner
-              (inner check-key (rest x))
+(defmacro when-check
+  [& body]
+  (when enabled
+    `(do ~@body)))
 
-              x)))
-        body))))
+(def !status impl/!status)
+
+(comment
+  (walk/macroexpand-all
+    `(check ::foo
+       (do-something-fun)
+       (do-something-else)
+       (blah)))
+
+  (requiring-resolve 'check.impl/default-reporter)
+
+  (check ::foo
+    (prn (samp ::string))))

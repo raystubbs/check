@@ -12,6 +12,7 @@ node_modules
 .idea
 pom.xml
 *.pom.asc
+*.pom
 target/
 cljs-runtime/
 test/snapshots/current/
