@@ -1,7 +1,9 @@
 (ns ^:no-doc check.impl
   (:require
    [check.protocols]
-   [check.core :as-alias core]))
+   [check.core :as-alias core]
+   #?(:clj [clojure.pprint :refer [pprint]]
+      :cljs [cljs.pprint :refer [pprint]])))
 
 (defn try-catch
   [try-fn catch-fn]
@@ -24,8 +26,7 @@
          (:red ansi-term-codes)
          "Check Failed" (::core/key report)
          (:reset ansi-term-codes))
-       (when-some [error (::core/error report)]
-         (println error))))
+         (pprint (::core/error report))))
 
    :cljs
    (let [has-devtools? (boolean (find-ns 'devtools.formatters.core))
@@ -33,13 +34,22 @@
      (defn default-reporter
        [report]
        (when (= (::core/status report) ::core/failure)
-         (js/console.error 
-           (when-not in-browser? (:red ansi-term-codes))
-           "Check Failed"
-           (cond-> (::core/key report) (not has-devtools?) pr-str)
-           (when-not in-browser? (:reset ansi-term-codes))
-           "\n"
-           (::core/error report))))))
+         (cond
+           has-devtools?
+           (js/console.error "Check Failed " (::core/key report) "\n" (::core/error report))
+           
+           in-browser?
+           (js/console.error
+             "Check Failed " (pr-str (::core/key report)) "\n"
+             (with-out-str (pprint (ex-data (::core/error report))))
+             (.-stack (::core/error report)))
+           
+           :else
+           (js/console.error
+             (:red ansi-term-codes) "Check Failed " (pr-str (::core/key report)) (:reset ansi-term-codes)
+             "\n"
+             (with-out-str (pprint (ex-data (::core/error report))))
+             (.-stack (::core/error report))))))))
 
 (defn fail
   [error]
@@ -47,7 +57,6 @@
     (async-chain-fn [_]
       (fn [context complete]
         (complete (assoc context ::core/error error))))))
-
 
 (defn report
   [context]

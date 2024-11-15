@@ -3,6 +3,7 @@
    [clojure.java.basis :as basis]
    [clojure.java.io :as io]
    [clojure.walk :as walk]
+   [clojure.repl :as repl]
    [clojure.edn :as edn]
    [check.impl :as impl])
   (:import
@@ -77,6 +78,15 @@
     `(do ~@body)))
 
 (def !status impl/!status)
+
+(defn expect
+  [f & args]
+  (when-not (apply f args)
+    (throw
+      (ex-info
+        "Expectation Unsatisfied"
+        {::expect-fun (cond-> (str f) (fn? f) repl/demunge)
+         ::expect-args args}))))
 
 (comment
   (walk/macroexpand-all
