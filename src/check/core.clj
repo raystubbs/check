@@ -1,6 +1,5 @@
 (ns check.core
   (:require
-   [clojure.java.basis :as basis]
    [clojure.java.io :as io]
    [clojure.walk :as walk]
    [clojure.repl :as repl]
@@ -10,18 +9,29 @@
    java.net.URL
    java.io.PushbackReader))
 
-(def enabled
-  (-> (basis/current-basis)
-    :argmap
-    :me.raystubbs.check/enabled
-    boolean))
+(def ^:private deps
+  (some-> (requiring-resolve 'clojure.java.basis/current-basis)
+    (apply nil)
+    :argmap))
 
-(def reporter
+(def ^:private enabled
+  (boolean (:me.raystubbs.check/enabled deps)))
+
+(def ^:private reporter
   (or
-    (let [sym (-> (basis/current-basis) :argmap :me.raystubbs.check/reporter)]
+    (let [sym (:me.raystubbs.check/reporter deps)]
       (when (qualified-symbol? sym)
         sym))
     'check.impl/default-reporter))
+
+(def ^:private include-ns-regex (some-> (:me.raystubbs.check/ns-include-re deps) re-pattern))
+(def ^:private exclude-ns-regex (some-> (:me.raystubbs.check/ns-exclude-re deps) re-pattern))
+
+(defn- check-ns?
+  [s]
+  (and enabled
+    (or (nil? include-ns-regex) (re-matches include-ns-regex s))
+    (or (nil? exclude-ns-regex) (not (re-matches exclude-ns-regex s)))))
 
 (def ^:private generators
   (reduce
@@ -61,7 +71,7 @@
 
 (defmacro check
   [check-key & body]
-  (when enabled
+  (when (check-ns? (str *ns*))
     `(do
        (swap! check.impl/!status assoc ~check-key ::pending)
        (async-chain-forms ~body
@@ -74,7 +84,7 @@
 
 (defmacro when-check
   [& body]
-  (when enabled
+  (when (check-ns? (str *ns*))
     `(do ~@body)))
 
 (def !status impl/!status)
